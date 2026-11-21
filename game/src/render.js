@@ -315,6 +315,49 @@ export function createRenderer(canvas) {
     }
   }
 
+  function drawGarageZone(state, box) {
+    const zone = state.city.locations.garage.zone;
+    if (zone.x + zone.w < box.left || zone.x > box.right || zone.y + zone.h < box.top || zone.y > box.bottom) return;
+    ctx.fillStyle = 'rgba(255, 181, 46, 0.07)';
+    ctx.fillRect(zone.x, zone.y, zone.w, zone.h);
+    ctx.strokeStyle = 'rgba(255, 181, 46, 0.55)';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([14, 10]);
+    ctx.strokeRect(zone.x, zone.y, zone.w, zone.h);
+    ctx.setLineDash([]);
+  }
+
+  function drawMarker(state) {
+    const marker = state.marker;
+    if (marker === null) return;
+    const pulse = 26 + Math.sin(state.time * 4.2) * 5;
+    ctx.strokeStyle = marker.color;
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.arc(marker.x, marker.y, pulse, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = marker.color;
+    ctx.globalAlpha = 0.16;
+    ctx.beginPath();
+    ctx.arc(marker.x, marker.y, pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    // A pillar of light, so the target reads from streets away.
+    const grad = ctx.createLinearGradient(0, marker.y - 210, 0, marker.y);
+    grad.addColorStop(0, 'rgba(255, 181, 46, 0)');
+    grad.addColorStop(1, 'rgba(255, 181, 46, 0.4)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(marker.x - 9, marker.y - 210, 18, 210);
+    const bobY = marker.y - 226 + Math.sin(state.time * 3) * 6;
+    ctx.font = `bold 30px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(20, 20, 16, 0.85)';
+    ctx.fillText(marker.label, marker.x + 1.5, bobY + 1.5);
+    ctx.fillStyle = marker.color;
+    ctx.fillText(marker.label, marker.x, bobY);
+  }
+
   function drawParticles(state) {
     for (const p of state.particles) {
       const r = p.size * (p.rise > 0 ? 1.9 - p.t / p.life : 0.35 + (p.t / p.life) * 0.65);
@@ -338,9 +381,11 @@ export function createRenderer(canvas) {
     drawSkids(state);
     drawBuildings(state, box);
     drawPalms(state, box);
+    drawGarageZone(state, box);
     drawCars(state, box);
     drawPeds(state, box);
     drawPlayer(state);
+    drawMarker(state);
     drawParticles(state);
   }
 

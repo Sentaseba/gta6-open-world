@@ -9,6 +9,7 @@ import { createPlayer, updatePlayer } from './player.js';
 import { createCars, tryEnterExit, updateCars } from './vehicles.js';
 import { createPeds, updatePeds } from './pedestrians.js';
 import { commitCrimes, updatePolice, updateStars, updateWanted } from './police.js';
+import { garageSale, updateMissions } from './missions.js';
 import { updateEffects } from './effects.js';
 import { ACTION_INTERACT } from './input.js';
 import { updateToasts } from './hud.js';
@@ -26,6 +27,10 @@ export function createWorld(seed, saved) {
     peds: [],
     wanted: { heat: 0, stars: 0, lastCrimeAt: -100, bustT: 0, hidden: false },
     mission: null,
+    marker: null,
+    objective: '',
+    missionTime: null,
+    missionTimeTotal: null,
     storyIndex: saved?.story ?? 0,
     cash: saved?.cash ?? 60,
     stats: { earned: saved?.earned ?? 0, stolen: 0, busted: 0, wasted: 0 },
@@ -51,13 +56,16 @@ export function createWorld(seed, saved) {
 export function stepWorld(state, input, actions, dt) {
   state.time += dt;
   if (state.over !== null) return;
-  if (actions & ACTION_INTERACT) tryEnterExit(state);
+  if (actions & ACTION_INTERACT) {
+    if (!garageSale(state)) tryEnterExit(state);
+  }
   updatePlayer(state, input, actions, dt);
   updateCars(state, input, dt);
   updatePeds(state, dt);
   commitCrimes(state);
   updateWanted(state, dt);
   updatePolice(state, dt);
+  updateMissions(state, dt);
   updateEffects(state, dt);
   updateToasts(state, dt);
   if (state.player.health <= 0) {

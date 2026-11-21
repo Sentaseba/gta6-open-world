@@ -8,10 +8,11 @@
 // and sets window.__shotReady.
 import { STEP } from './config.js';
 import { createWorld, respawn, stepWorld } from './world.js';
-import { ACTION_CONFIRM, ACTION_PAUSE, createInput } from './input.js';
+import { ACTION_CONFIRM, ACTION_MUTE, ACTION_PAUSE, createInput } from './input.js';
 import { createRenderer } from './render.js';
 import { createHud, SCREEN_OVER, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE } from './hud.js';
 import { loadSave, storeSave } from './save.js';
+import { createAudio } from './audio.js';
 import { stageShot } from './shots.js';
 
 /** The longest frame the loop catches up on; a longer stall (a hidden tab) is dropped, not replayed. */
@@ -51,9 +52,14 @@ function runShot(name) {
 
 function runGame() {
   const input = createInput(canvas);
+  const audio = createAudio();
   let screen = SCREEN_TITLE;
   let accumulator = 0;
   let last = performance.now();
+
+  // Sound starts on the first gesture, as browsers require.
+  window.addEventListener('keydown', () => audio.unlock(), { once: true });
+  window.addEventListener('pointerdown', () => audio.unlock(), { once: true });
 
   function announce(message) {
     status.textContent = message;
@@ -67,6 +73,7 @@ function runGame() {
 
   function handleActions() {
     const actions = input.takeActions();
+    if (actions & ACTION_MUTE) announce(audio.toggleMute() ? 'Muted.' : 'Sound on.');
     if (actions & ACTION_CONFIRM && (screen === SCREEN_TITLE || screen === SCREEN_OVER)) startRun();
     else if (actions & ACTION_PAUSE && screen === SCREEN_PLAY) {
       screen = SCREEN_PAUSED;
@@ -101,6 +108,7 @@ function runGame() {
     } else {
       accumulator = 0;
     }
+    audio.update(world, screen !== SCREEN_PLAY);
     renderer.drawWorld(world);
     hud.draw(renderer.ctx, renderer.view, world, screen);
   }

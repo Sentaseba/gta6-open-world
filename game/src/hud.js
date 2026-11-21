@@ -1,7 +1,8 @@
 // Everything drawn over the world in view space: the health and cash readout,
-// toasts and banners, and the full-screen panels (title, pause, and the two
-// ways a run ends). The minimap lives here too.
-import { FONT, PALETTE, PLAYER, POLICE, VIEW } from './config.js';
+// wanted stars, the mission objective and banner, toasts, the minimap, and
+// the full-screen panels (title, pause, and the two ways a run ends).
+import { FONT, PALETTE, PLAYER, POLICE, VIEW, WORLD } from './config.js';
+import { LAND } from './city.js';
 
 export const SCREEN_TITLE = 'title';
 export const SCREEN_PLAY = 'play';
@@ -101,6 +102,87 @@ export function createHud() {
     bar(ctx, VIEW.width / 2 - 130, 158, 260, 12, fraction, PALETTE.danger);
   }
 
+  function drawObjective(ctx, state) {
+    if (state.objective === '') return;
+    let label = state.objective;
+    if (state.missionTime !== null) {
+      const left = Math.max(0, Math.ceil(state.missionTime));
+      label += ` · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+    }
+    ctx.font = `bold 19px ${FONT}`;
+    const w = ctx.measureText(label).width + 36;
+    const x = (VIEW.width - w) / 2;
+    ctx.fillStyle = PALETTE.panel;
+    ctx.fillRect(x, 14, w, 34);
+    text(ctx, label, VIEW.width / 2, 38, 19, PALETTE.text, 'center');
+    if (state.missionTime !== null && state.missionTimeTotal !== null) {
+      const fraction = Math.max(0, state.missionTime / state.missionTimeTotal);
+      ctx.fillStyle = fraction < 0.25 ? PALETTE.danger : PALETTE.accent;
+      ctx.fillRect(x, 48, w * fraction, 4);
+    }
+  }
+
+  function drawBanner(ctx, state) {
+    const banner = state.banner;
+    if (banner === null) return;
+    ctx.globalAlpha = Math.min(1, banner.t / 0.7);
+    const w = 780;
+    const x = (VIEW.width - w) / 2;
+    ctx.fillStyle = PALETTE.panel;
+    ctx.fillRect(x, 64, w, 92);
+    ctx.fillStyle = PALETTE.accent;
+    ctx.fillRect(x, 64, w, 4);
+    text(ctx, banner.title, VIEW.width / 2, 102, 27, PALETTE.accent, 'center');
+    text(ctx, banner.line, VIEW.width / 2, 136, 18, '#e8eef2', 'center', 'normal');
+    ctx.globalAlpha = 1;
+  }
+
+  function drawMinimap(ctx, state) {
+    const w = 208;
+    const h = 156;
+    const x = VIEW.width - w - 16;
+    const y = VIEW.height - h - 16;
+    const sx = w / WORLD.width;
+    const sy = h / WORLD.height;
+    const px = (wx) => x + wx * sx;
+    const py = (wy) => y + wy * sy;
+    ctx.fillStyle = 'rgba(10, 18, 24, 0.78)';
+    ctx.fillRect(x - 3, y - 3, w + 6, h + 6);
+    ctx.fillStyle = PALETTE.waterDeep;
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = '#ddd5bd';
+    ctx.fillRect(px(LAND.minX), py(LAND.minY), (LAND.maxX - LAND.minX) * sx, (LAND.maxY - LAND.minY) * sy);
+    ctx.strokeStyle = PALETTE.road;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (const cx of state.city.roadsX) { ctx.moveTo(px(cx), py(LAND.minY)); ctx.lineTo(px(cx), py(LAND.maxY)); }
+    for (const cy of state.city.roadsY) { ctx.moveTo(px(LAND.minX), py(cy)); ctx.lineTo(px(LAND.maxX), py(cy)); }
+    ctx.stroke();
+    const dot = (wx, wy, color, r) => {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(px(wx), py(wy), r, 0, Math.PI * 2);
+      ctx.fill();
+    };
+    dot(state.city.locations.garage.x, state.city.locations.garage.y, '#39d353', 3.4);
+    dot(state.city.locations.safehouse.x, state.city.locations.safehouse.y, '#ffffff', 3);
+    dot(state.city.locations.hospital.x, state.city.locations.hospital.y, '#ff8fa3', 3);
+    for (const car of state.cars) {
+      if (car.mode === 'police') dot(car.x, car.y, Math.floor(state.time * 3) % 2 ? '#5b8cff' : '#ff5147', 3);
+    }
+    if (state.marker !== null) {
+      dot(state.marker.x, state.marker.y, '#ffb52e', 3.6 + Math.sin(state.time * 5) * 1.1);
+    }
+    const player = state.player;
+    dot(player.x, player.y, '#ffffff', 4);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(px(player.x), py(player.y));
+    ctx.lineTo(px(player.x) + Math.cos(player.angle) * 9, py(player.y) + Math.sin(player.angle) * 9);
+    ctx.stroke();
+  }
+
   /** Paint the overlay for the current screen. World first, then this. */
   function draw(ctx, view, state, screen) {
     ctx.setTransform(view.scale, 0, 0, view.scale, view.x, view.y);
@@ -118,7 +200,10 @@ export function createHud() {
     }
     drawStatus(ctx, state);
     drawStars(ctx, state);
+    drawObjective(ctx, state);
+    drawBanner(ctx, state);
     drawBust(ctx, state);
+    drawMinimap(ctx, state);
     drawToasts(ctx, state);
     if (screen === SCREEN_PAUSED) {
       ctx.fillStyle = 'rgba(10, 20, 28, 0.4)';
@@ -146,8 +231,12 @@ export function toast(state, message, color = PALETTE.text) {
   if (state.toasts.length > 4) state.toasts.shift();
 }
 
-/** Age the toasts; called once a step by the world. */
+/** Age the toasts and the banner; called once a step by the world. */
 export function updateToasts(state, dt) {
   for (const item of state.toasts) item.t -= dt;
   state.toasts = state.toasts.filter((item) => item.t > 0);
+  if (state.banner !== null) {
+    state.banner.t -= dt;
+    if (state.banner.t <= 0) state.banner = null;
+  }
 }

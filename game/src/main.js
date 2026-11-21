@@ -3,7 +3,7 @@
 // renderer and HUD paint what is there. The game moves between four screens:
 // title, play, paused and over.
 //
-// ?seed=N fixes the city and traffic. ?shot=start|play|end|chase (with
+// ?seed=N fixes the city and traffic. ?shot=title|chase|drive|foot (with
 // &seed=N) stages a screenshot scene instead of running the loop, paints it
 // and sets window.__shotReady.
 import { STEP } from './config.js';

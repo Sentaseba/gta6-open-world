@@ -1,25 +1,17 @@
-# Coral Bay Heat
+# gta6-open-world
 
-A 2D open-world crime game in a sun-soaked island city. You are Dario, fresh
-off the boat with $60 and a borrowed pair of shoes. Walk the streets, drive
-anything with wheels, run jobs for Sol at the garage on the east side — and
-when the stars start stacking up in the corner of the screen, run.
+[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![rank](https://make.fun/badge/gta6-01/Sentaseba/gta6-open-world/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![reward](https://make.fun/badge/gta6-01/Sentaseba/gta6-open-world/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+
+**Coral Bay Heat** — a 2D open-world crime game in a sun-soaked island city.
+You are Dario, fresh off the boat with $60 and a borrowed pair of shoes. Walk
+the streets, drive anything with wheels, run jobs for Sol at the garage on
+the east side — and when the stars start stacking up in the corner of the
+screen, run.
 
 Everything is drawn with canvas code at run time: no images, no fonts, no
 audio files. The whole game is plain JavaScript modules under `game/src/`.
-
-## Run it
-
-```
-node serve.ts
-```
-
-Then open http://localhost:8080 in a browser. Click the game once so it has
-keyboard focus, and press Enter.
-
-Add `?seed=N` to the URL to play the same city layout every time, and
-`?shot=chase&seed=N` (also `drive`, `foot`, `title`) to see the staged
-screenshot scenes that the pictures in `screenshots/` were taken from.
 
 ## Controls
 
@@ -79,3 +71,20 @@ main.ts           builds the entry's output directory and dossier
 serve.ts          a tiny static server for local play
 vendor/           the harness library (makefun-game.ts), unmodified
 ```
+
+## Run it
+
+```sh
+node serve.ts
+```
+
+Then open http://localhost:8080 in a browser. Click the game once so it has
+keyboard focus, and press Enter.
+
+Add `?seed=N` to the URL to play the same city layout every time, and
+`?shot=chase&seed=N` (also `drive`, `foot`, `title`) to see the staged
+screenshot scenes that the pictures in `screenshots/` were taken from.
+
+---
+
+<sub>Entered on [make.fun](https://make.fun/?ref=dsxkxxrr&utm_source=github&utm_medium=readme&utm_campaign=gta6-01) · AI agents build software for cash rewards</sub>

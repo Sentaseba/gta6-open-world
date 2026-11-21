@@ -1,39 +1,24 @@
-// Drawing only: the world's state and the current screen in, pixels out. The 1280x720 playfield
-// is scaled to fit the window and centred, the margin filled with the backdrop colour. Flat
-// rectangles and circles, canvas text for the HUD and the panels. Text that holds a number is
-// rebuilt only when the number changes, so a frame allocates nothing.
-import { FIELD, FONT, LIVES, PALETTE } from './config.js';
-import { KIND_COIN } from './world.js';
+// Drawing the world: island, roads, buildings, palms and the people and cars
+// in it. The camera follows the player (or a focus the screenshot scenes set)
+// and everything is culled to the view. HUD and menus live in hud.js; this
+// file never draws text over the world except building signs.
+import { FONT, PALETTE, PLAYER, ROAD, VIEW, WORLD } from './config.js';
+import { LAND } from './city.js';
 
-export const SCREEN_TITLE = 'title';
-export const SCREEN_PLAY = 'play';
-export const SCREEN_PAUSED = 'paused';
-export const SCREEN_OVER = 'over';
-
-/** The panel's width; its height grows with its lines: room for the title, the lines and the prompt. */
-const PANEL = { width: 600, top: 134, line: 34, bottom: 70 };
-const LIFE_SIZE = 20;
-const LIFE_GAP = 8;
-
-function cachedLabel(prefix) {
-  let value = -1;
-  let text = '';
-  return function label(next) {
-    if (next !== value) {
-      value = next;
-      text = prefix + next;
-    }
-    return text;
-  };
+/** Darken (f < 1) or lighten (f > 1) a #rrggbb colour. */
+export function shade(hex, f) {
+  const n = Number.parseInt(hex.slice(1), 16);
+  const channel = (v) => Math.max(0, Math.min(255, Math.round(v * f)));
+  const r = channel((n >> 16) & 255);
+  const g = channel((n >> 8) & 255);
+  const b = channel(n & 255);
+  return `rgb(${r}, ${g}, ${b})`;
 }
 
 export function createRenderer(canvas) {
-  const context = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d');
   const view = { scale: 1, x: 0, y: 0 };
-  const scoreLabel = cachedLabel('Score ');
-  const levelLabel = cachedLabel('Level ');
-  const finalLabel = cachedLabel('Score ');
-  const bestLabel = cachedLabel('Best ');
+  const camera = { x: WORLD.width / 2, y: WORLD.height / 2 };
 
   function resize() {
     const ratio = window.devicePixelRatio || 1;
@@ -41,101 +26,203 @@ export function createRenderer(canvas) {
     const height = Math.round(window.innerHeight * ratio);
     canvas.width = width;
     canvas.height = height;
-    view.scale = Math.min(width / FIELD.width, height / FIELD.height);
-    view.x = (width - FIELD.width * view.scale) / 2;
-    view.y = (height - FIELD.height * view.scale) / 2;
+    view.scale = Math.min(width / VIEW.width, height / VIEW.height);
+    view.x = (width - VIEW.width * view.scale) / 2;
+    view.y = (height - VIEW.height * view.scale) / 2;
   }
 
-  const fonts = new Map();
-  function text(value, x, y, size, color, align) {
-    if (!fonts.has(size)) fonts.set(size, `${size}px ${FONT}`);
-    context.font = fonts.get(size);
-    context.fillStyle = color;
-    context.textAlign = align;
-    context.fillText(value, x, y);
+  function visible(state) {
+    const focus = state.cameraFocus ?? state.player;
+    camera.x = Math.max(VIEW.width / 2 - 140, Math.min(WORLD.width - VIEW.width / 2 + 140, focus.x));
+    camera.y = Math.max(VIEW.height / 2 - 110, Math.min(WORLD.height - VIEW.height / 2 + 110, focus.y));
+    return {
+      left: camera.x - VIEW.width / 2 - 90,
+      top: camera.y - VIEW.height / 2 - 90,
+      right: camera.x + VIEW.width / 2 + 90,
+      bottom: camera.y + VIEW.height / 2 + 90,
+    };
   }
 
-  function drawField(state) {
-    context.fillStyle = PALETTE.sky;
-    context.fillRect(0, 0, FIELD.width, FIELD.height);
-    context.fillStyle = PALETTE.ground;
-    context.fillRect(0, FIELD.groundY, FIELD.width, FIELD.height - FIELD.groundY);
+  function drawGround(state, box) {
+    ctx.fillStyle = PALETTE.waterDeep;
+    ctx.fillRect(box.left, box.top, box.right - box.left, box.bottom - box.top);
+    ctx.fillStyle = PALETTE.water;
+    const band = 46;
+    for (let y = Math.floor(box.top / band) * band; y < box.bottom; y += band) {
+      if ((y / band) % 2 === 0) ctx.fillRect(box.left, y, box.right - box.left, band / 2);
+    }
+    ctx.fillStyle = PALETTE.sand;
+    ctx.fillRect(LAND.minX, LAND.minY, LAND.maxX - LAND.minX, LAND.maxY - LAND.minY);
+    const gx = state.city.roadsX[0] - ROAD.width / 2 - 84;
+    const gy = state.city.roadsY[0] - ROAD.width / 2 - 84;
+    const gw = state.city.roadsX[state.city.roadsX.length - 1] - state.city.roadsX[0] + ROAD.width + 168;
+    const gh = state.city.roadsY[state.city.roadsY.length - 1] - state.city.roadsY[0] + ROAD.width + 168;
+    ctx.fillStyle = PALETTE.cityGround;
+    ctx.fillRect(gx, gy, gw, gh);
+    for (const park of state.city.parks) {
+      ctx.fillStyle = PALETTE.grass;
+      ctx.fillRect(park.x, park.y, park.w, park.h);
+      ctx.fillStyle = PALETTE.parkPath;
+      ctx.fillRect(park.x, park.y + park.h / 2 - 9, park.w, 18);
+      ctx.fillRect(park.x + park.w / 2 - 9, park.y, 18, park.h);
+    }
+  }
 
-    const items = state.items;
-    for (let index = 0; index < items.length; index += 1) {
-      const item = items[index];
-      if (!item.active) continue;
-      if (item.kind === KIND_COIN) {
-        context.fillStyle = PALETTE.coin;
-        context.beginPath();
-        context.arc(item.x + item.width / 2, item.y + item.height / 2, item.width / 2, 0, Math.PI * 2);
-        context.fill();
-      } else {
-        context.fillStyle = PALETTE.block;
-        context.fillRect(item.x, item.y, item.width, item.height);
+  function drawRoads(state, box) {
+    const city = state.city;
+    const half = ROAD.width / 2;
+    ctx.fillStyle = PALETTE.road;
+    for (const cx of city.roadsX) ctx.fillRect(cx - half, box.top, ROAD.width, box.bottom - box.top);
+    for (const cy of city.roadsY) ctx.fillRect(box.left, cy - half, box.right - box.left, ROAD.width);
+    ctx.strokeStyle = PALETTE.roadEdge;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (const cx of city.roadsX) {
+      ctx.moveTo(cx - half + 3, box.top);
+      ctx.lineTo(cx - half + 3, box.bottom);
+      ctx.moveTo(cx + half - 3, box.top);
+      ctx.lineTo(cx + half - 3, box.bottom);
+    }
+    for (const cy of city.roadsY) {
+      ctx.moveTo(box.left, cy - half + 3);
+      ctx.lineTo(box.right, cy - half + 3);
+      ctx.moveTo(box.left, cy + half - 3);
+      ctx.lineTo(box.right, cy + half - 3);
+    }
+    ctx.stroke();
+    // Centre dashes, skipped inside intersections.
+    ctx.fillStyle = PALETTE.laneDash;
+    for (const cx of city.roadsX) {
+      for (let y = Math.floor(box.top / 52) * 52; y < box.bottom; y += 52) {
+        if (city.roadsY.some((cy) => Math.abs(y - cy) < half + 16)) continue;
+        ctx.fillRect(cx - 2, y, 4, 28);
       }
     }
+    for (const cy of city.roadsY) {
+      for (let x = Math.floor(box.left / 52) * 52; x < box.right; x += 52) {
+        if (city.roadsX.some((cx) => Math.abs(x - cx) < half + 16)) continue;
+        ctx.fillRect(x, cy - 2, 28, 4);
+      }
+    }
+    // Crosswalks on each approach to an intersection.
+    ctx.fillStyle = PALETTE.crosswalk;
+    for (const cx of city.roadsX) {
+      for (const cy of city.roadsY) {
+        if (cx < box.left - 160 || cx > box.right + 160 || cy < box.top - 160 || cy > box.bottom + 160) continue;
+        for (let s = -42; s <= 42; s += 14) {
+          ctx.fillRect(cx + s - 4, cy - half - 24, 8, 18);
+          ctx.fillRect(cx + s - 4, cy + half + 6, 8, 18);
+          ctx.fillRect(cx - half - 24, cy + s - 4, 18, 8);
+          ctx.fillRect(cx + half + 6, cy + s - 4, 18, 8);
+        }
+      }
+    }
+  }
 
+  function drawBlocks(state, box) {
+    for (const block of state.city.blocks) {
+      if (block.x + block.w < box.left || block.x > box.right || block.y + block.h < box.top || block.y > box.bottom) continue;
+      if (block.kind === 'park') continue;
+      ctx.fillStyle = block.kind === 'parking' ? '#8f8c84' : PALETTE.sidewalk;
+      ctx.fillRect(block.x - 5, block.y - 5, block.w + 10, block.h + 10);
+    }
+  }
+
+  function drawBuilding(b) {
+    const lift = b.floors * 7;
+    ctx.fillStyle = PALETTE.shadow;
+    ctx.fillRect(b.x + 10, b.y + 14, b.w, b.h);
+    ctx.fillStyle = shade(b.color, 0.82);
+    ctx.fillRect(b.x, b.y - lift, b.w, b.h + lift);
+    // Windows on the front wall.
+    ctx.fillStyle = 'rgba(255, 244, 190, 0.75)';
+    const rows = Math.min(b.floors, 6);
+    for (let r = 0; r < rows; r += 1) {
+      const wy = b.y + b.h - lift + 8 + r * (lift / Math.max(rows, 1));
+      if (wy > b.y + b.h - 8) break;
+      for (let wx = b.x + 10; wx < b.x + b.w - 12; wx += 22) ctx.fillRect(wx, wy, 10, 6);
+    }
+    ctx.fillStyle = shade(b.color, 1.12);
+    ctx.fillRect(b.x, b.y - lift, b.w, b.h);
+    ctx.strokeStyle = 'rgba(90, 70, 40, 0.35)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(b.x + 7, b.y - lift + 7, b.w - 14, b.h - 14);
+    if (b.label) {
+      ctx.fillStyle = 'rgba(40, 34, 24, 0.72)';
+      ctx.font = `bold 15px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(b.label, b.x + b.w / 2, b.y - lift + b.h / 2);
+    }
+  }
+
+  function drawBuildings(state, box) {
+    for (const b of state.city.buildings) {
+      if (b.x + b.w < box.left || b.x > box.right || b.y + b.h < box.top || b.y - 70 > box.bottom) continue;
+      drawBuilding(b);
+    }
+  }
+
+  function drawPalms(state, box) {
+    for (const prop of state.city.props) {
+      if (prop.x < box.left || prop.x > box.right || prop.y < box.top || prop.y > box.bottom) continue;
+      ctx.strokeStyle = PALETTE.palmTrunk;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(prop.x, prop.y);
+      ctx.lineTo(prop.x + 3, prop.y - 13);
+      ctx.stroke();
+      ctx.fillStyle = PALETTE.palmLeaf;
+      for (let i = 0; i < 6; i += 1) {
+        const a = (i / 6) * Math.PI * 2 + prop.x;
+        ctx.beginPath();
+        ctx.ellipse(prop.x + 3 + Math.cos(a) * 11, prop.y - 15 + Math.sin(a) * 5, 12, 4.5, a, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  function drawPlayer(state) {
     const player = state.player;
-    // Blink while invulnerable after a hit: hidden on every other tenth of a second.
-    if (player.invulnerable === 0 || Math.floor(player.invulnerable * 10) % 2 === 1) {
-      context.fillStyle = PALETTE.player;
-      context.fillRect(player.x, player.y, player.width, player.height);
-    }
+    if (player.car !== null) return;
+    const bob = player.speed > 0 ? Math.sin(player.stepPhase) * 1.6 : 0;
+    ctx.fillStyle = PALETTE.shadow;
+    ctx.beginPath();
+    ctx.ellipse(player.x, player.y + 10, 13, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ff7847';
+    ctx.beginPath();
+    ctx.arc(player.x, player.y + bob, PLAYER.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#f2c094';
+    ctx.beginPath();
+    ctx.arc(player.x, player.y + bob - 2, 7.5, 0, Math.PI * 2);
+    ctx.fill();
+    // A cap brim showing the way he faces.
+    ctx.strokeStyle = '#173f5f';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(player.x, player.y + bob - 2);
+    ctx.lineTo(player.x + Math.cos(player.angle) * 13, player.y + bob - 2 + Math.sin(player.angle) * 13);
+    ctx.stroke();
   }
 
-  function drawHud(state) {
-    context.textBaseline = 'top';
-    text(scoreLabel(state.score), 24, 20, 28, PALETTE.text, 'left');
-    text(levelLabel(state.level), FIELD.width / 2, 20, 28, PALETTE.text, 'center');
-    const firstLife = FIELD.width - 24 - LIVES * (LIFE_SIZE + LIFE_GAP) + LIFE_GAP;
-    text('Lives', firstLife - 12, 20, 28, PALETTE.text, 'right');
-    for (let life = 0; life < LIVES; life += 1) {
-      context.fillStyle = life < state.lives ? PALETTE.player : PALETTE.ground;
-      context.fillRect(firstLife + life * (LIFE_SIZE + LIFE_GAP), 24, LIFE_SIZE, LIFE_SIZE);
-    }
-  }
-
-  function drawPanel(title, lines, prompt) {
-    const height = PANEL.top + lines.length * PANEL.line + PANEL.bottom;
-    const x = (FIELD.width - PANEL.width) / 2;
-    const y = (FIELD.height - height) / 2;
-    context.fillStyle = PALETTE.panel;
-    context.fillRect(x, y, PANEL.width, height);
-    context.textBaseline = 'alphabetic';
-    text(title, FIELD.width / 2, y + 78, 48, PALETTE.text, 'center');
-    for (let index = 0; index < lines.length; index += 1) {
-      text(lines[index], FIELD.width / 2, y + PANEL.top + index * PANEL.line, 22, PALETTE.muted, 'center');
-    }
-    text(prompt, FIELD.width / 2, y + height - 40, 24, PALETTE.coin, 'center');
-  }
-
-  const TITLE_LINES = ['Dodge the red blocks. Catch the gold coins.', 'Move with ← → or A D.  Pause with P.', ''];
-  const PAUSED_LINES = ['The blocks will wait for you.'];
-  const OVER_LINES = ['', ''];
-
-  /** Paint one frame: the field, then the HUD or a panel for the screen the game is on. */
-  function draw(state, screen, best) {
-    context.setTransform(1, 0, 0, 1, 0, 0);
-    context.fillStyle = PALETTE.backdrop;
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.setTransform(view.scale, 0, 0, view.scale, view.x, view.y);
-    drawField(state);
-    if (screen === SCREEN_TITLE) {
-      TITLE_LINES[2] = bestLabel(best);
-      drawPanel('Block Dodger', TITLE_LINES, 'Press Space or click to start');
-      return;
-    }
-    drawHud(state);
-    if (screen === SCREEN_PAUSED) drawPanel('Paused', PAUSED_LINES, 'Press P to resume');
-    else if (screen === SCREEN_OVER) {
-      OVER_LINES[0] = finalLabel(state.score);
-      OVER_LINES[1] = bestLabel(best);
-      drawPanel('Game over', OVER_LINES, 'Press Space or click to play again');
-    }
+  /** Paint the world for this frame. The HUD is drawn separately, in view space. */
+  function drawWorld(state) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#12333d';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const box = visible(state);
+    ctx.setTransform(view.scale, 0, 0, view.scale, view.x + (VIEW.width / 2 - camera.x) * view.scale, view.y + (VIEW.height / 2 - camera.y) * view.scale);
+    drawGround(state, box);
+    drawBlocks(state, box);
+    drawRoads(state, box);
+    drawBuildings(state, box);
+    drawPalms(state, box);
+    drawPlayer(state);
   }
 
   resize();
   window.addEventListener('resize', resize);
-  return { draw };
+  return { canvas, ctx, view, camera, drawWorld };
 }

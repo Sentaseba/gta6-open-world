@@ -1,5 +1,6 @@
-// A small seeded random number generator (mulberry32): the same seed gives the same game,
-// which is what makes the screenshot scenes repeatable.
+// A small seeded random number generator (mulberry32). The same seed always
+// builds the same city and the same traffic, which is what makes the
+// screenshot scenes repeatable; live play seeds it from the clock instead.
 
 export function createRandom(seed) {
   let a = seed | 0;
@@ -9,4 +10,19 @@ export function createRandom(seed) {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/** A random float in [min, max). */
+export function range(random, min, max) {
+  return min + random() * (max - min);
+}
+
+/** A random integer in [min, max], both ends included. */
+export function intRange(random, min, max) {
+  return min + Math.floor(random() * (max - min + 1));
+}
+
+/** A random element of a non-empty array. */
+export function pick(random, items) {
+  return items[Math.floor(random() * items.length)];
 }

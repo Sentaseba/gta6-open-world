@@ -2,8 +2,18 @@
 // in it. The camera follows the player (or a focus the screenshot scenes set)
 // and everything is culled to the view. HUD and menus live in hud.js; this
 // file never draws text over the world except building signs.
-import { FONT, PALETTE, PLAYER, ROAD, VIEW, WORLD } from './config.js';
+import { CAR, FONT, PALETTE, PLAYER, ROAD, VIEW, WORLD } from './config.js';
 import { LAND } from './city.js';
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
 
 /** Darken (f < 1) or lighten (f > 1) a #rrggbb colour. */
 export function shade(hex, f) {
@@ -207,6 +217,80 @@ export function createRenderer(canvas) {
     ctx.stroke();
   }
 
+  function drawSkids(state) {
+    for (const skid of state.skids) {
+      ctx.fillStyle = `rgba(28, 26, 24, ${0.32 * (skid.t / 9)})`;
+      ctx.beginPath();
+      ctx.arc(skid.x, skid.y, 3.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawCar(state, car) {
+    const L = CAR.length;
+    const W = CAR.width;
+    ctx.save();
+    ctx.translate(car.x, car.y);
+    ctx.rotate(car.angle);
+    ctx.fillStyle = PALETTE.shadow;
+    ctx.beginPath();
+    ctx.ellipse(3, 5, L / 2, W / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#15181c';
+    ctx.fillRect(-L / 2 + 4, -W / 2 - 2, 9, 5);
+    ctx.fillRect(-L / 2 + 4, W / 2 - 3, 9, 5);
+    ctx.fillRect(L / 2 - 13, -W / 2 - 2, 9, 5);
+    ctx.fillRect(L / 2 - 13, W / 2 - 3, 9, 5);
+    const wreck = car.mode === 'wreck';
+    roundRect(ctx, -L / 2, -W / 2, L, W, 6);
+    ctx.fillStyle = wreck ? '#3c3f45' : car.color;
+    ctx.fill();
+    if (car.kind === 'police' && !wreck) {
+      ctx.fillStyle = PALETTE.policeBlue;
+      ctx.fillRect(-L / 2 + 3, -4, L - 6, 8);
+      const flash = Math.floor(state.time * 3.4) % 2 === 0;
+      ctx.fillStyle = flash ? PALETTE.policeRed : '#7db4ff';
+      ctx.fillRect(-5, -W / 2 + 3, 10, 5);
+      ctx.fillStyle = flash ? '#7db4ff' : PALETTE.policeRed;
+      ctx.fillRect(-5, W / 2 - 8, 10, 5);
+    }
+    roundRect(ctx, -9, -W / 2 + 4, 21, W - 8, 3);
+    ctx.fillStyle = wreck ? '#10151b' : '#1d2733';
+    ctx.fill();
+    ctx.fillStyle = wreck ? '#232a31' : '#a8d8ea';
+    ctx.fillRect(11, -W / 2 + 5, 4, W - 10);
+    ctx.fillRect(-14, -W / 2 + 5, 3, W - 10);
+    ctx.fillStyle = '#fff3a0';
+    ctx.fillRect(L / 2 - 2, -W / 2 + 3, 2, 5);
+    ctx.fillRect(L / 2 - 2, W / 2 - 8, 2, 5);
+    ctx.fillStyle = '#e23b30';
+    ctx.fillRect(-L / 2, -W / 2 + 3, 2, 5);
+    ctx.fillRect(-L / 2, W / 2 - 8, 2, 5);
+    if (car.hitT > 0) {
+      roundRect(ctx, -L / 2, -W / 2, L, W, 6);
+      ctx.fillStyle = `rgba(255, 255, 255, ${car.hitT * 2.4})`;
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawCars(state, box) {
+    for (const car of state.cars) {
+      if (car.x < box.left || car.x > box.right || car.y < box.top || car.y > box.bottom) continue;
+      drawCar(state, car);
+    }
+  }
+
+  function drawParticles(state) {
+    for (const p of state.particles) {
+      const r = p.size * (p.rise > 0 ? 1.9 - p.t / p.life : 0.35 + (p.t / p.life) * 0.65);
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, Math.max(0.4, r), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
   /** Paint the world for this frame. The HUD is drawn separately, in view space. */
   function drawWorld(state) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -217,9 +301,12 @@ export function createRenderer(canvas) {
     drawGround(state, box);
     drawBlocks(state, box);
     drawRoads(state, box);
+    drawSkids(state);
     drawBuildings(state, box);
     drawPalms(state, box);
+    drawCars(state, box);
     drawPlayer(state);
+    drawParticles(state);
   }
 
   resize();

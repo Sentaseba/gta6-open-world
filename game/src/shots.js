@@ -15,10 +15,10 @@ const IDLE_INPUT = {
 /** Set `world` to the named scene and return the screen to draw over it. */
 export function stageShot(name, world) {
   if (name === 'play') {
-    for (let i = 0; i < 4 / STEP; i += 1) stepWorld(world, IDLE_INPUT, STEP);
+    for (let i = 0; i < 4 / STEP; i += 1) stepWorld(world, IDLE_INPUT, 0, STEP);
     return { screen: SCREEN_PLAY };
   }
   world.cameraFocus = { x: world.city.roadsX[3], y: world.city.roadsY[2] };
-  for (let i = 0; i < 3 / STEP; i += 1) stepWorld(world, IDLE_INPUT, STEP);
+  for (let i = 0; i < 3 / STEP; i += 1) stepWorld(world, IDLE_INPUT, 0, STEP);
   return { screen: SCREEN_TITLE };
 }

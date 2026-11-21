@@ -17,6 +17,13 @@ import { stageShot } from './shots.js';
 /** The longest frame the loop catches up on; a longer stall (a hidden tab) is dropped, not replayed. */
 const MAX_FRAME = 0.25;
 
+/** Nobody at the keys: used to keep the city alive behind the title screen. */
+const IDLE_INPUT = {
+  held: { up: false, down: false, left: false, right: false, sprint: false, brake: false },
+  takeActions: () => 0,
+  pointer: () => null,
+};
+
 const params = new URLSearchParams(window.location.search);
 const shot = params.get('shot');
 const seedParam = Number.parseInt(params.get('seed') ?? '', 10);
@@ -69,26 +76,31 @@ function runGame() {
       screen = SCREEN_PLAY;
       announce('Playing.');
     }
+    return actions;
   }
 
   function frame(now) {
     requestAnimationFrame(frame);
     accumulator += Math.min((now - last) / 1000, MAX_FRAME);
     last = now;
-    handleActions();
-    if (screen === SCREEN_PLAY) {
-      while (accumulator >= STEP && screen === SCREEN_PLAY) {
-        stepWorld(world, input, STEP);
+    const actions = handleActions();
+    if (screen === SCREEN_PLAY || screen === SCREEN_TITLE) {
+      // Behind the title the city lives on, driven by nobody.
+      const active = screen === SCREEN_PLAY;
+      let stepActions = active ? actions : 0;
+      while (accumulator >= STEP) {
+        stepWorld(world, active ? input : IDLE_INPUT, stepActions, STEP);
+        stepActions = 0;
         accumulator -= STEP;
-        if (world.over !== null) {
+        if (active && world.over !== null) {
           screen = SCREEN_OVER;
           storeSave(world);
           announce(world.over === 'busted' ? 'Busted.' : 'Wasted.');
+          break;
         }
       }
     } else {
       accumulator = 0;
-      if (screen === SCREEN_TITLE) stepWorld(world, input, 0);
     }
     renderer.drawWorld(world);
     hud.draw(renderer.ctx, renderer.view, world, screen);

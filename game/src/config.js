@@ -43,7 +43,7 @@ export const CAR_KINDS = {
   police: { topSpeed: 560, reverse: 180, accel: 420, brake: 720, grip: 3.6, value: 0 },
 };
 
-export const TRAFFIC = { cars: 15, speed: 250, gap: 92 };
+export const TRAFFIC = { cars: 12, speed: 250, gap: 92 };
 
 export const PEDS = { count: 26, walkSpeed: 74, runSpeed: 196 };
 

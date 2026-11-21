@@ -7,7 +7,7 @@
 // &seed=N) stages a screenshot scene instead of running the loop, paints it
 // and sets window.__shotReady.
 import { STEP } from './config.js';
-import { createWorld, stepWorld } from './world.js';
+import { createWorld, respawn, stepWorld } from './world.js';
 import { ACTION_CONFIRM, ACTION_PAUSE, createInput } from './input.js';
 import { createRenderer } from './render.js';
 import { createHud, SCREEN_OVER, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE } from './hud.js';
@@ -60,8 +60,7 @@ function runGame() {
   }
 
   function startRun() {
-    world.over = null;
-    world.player.health = 100;
+    if (world.over !== null) respawn(world);
     screen = SCREEN_PLAY;
     announce('Playing.');
   }

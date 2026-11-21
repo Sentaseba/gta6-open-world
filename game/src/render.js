@@ -281,6 +281,40 @@ export function createRenderer(canvas) {
     }
   }
 
+  function drawPeds(state, box) {
+    for (const ped of state.peds) {
+      if (ped.x < box.left || ped.x > box.right || ped.y < box.top || ped.y > box.bottom) continue;
+      if (ped.mode === 'down') {
+        ctx.fillStyle = PALETTE.shadow;
+        ctx.beginPath();
+        ctx.ellipse(ped.x, ped.y + 3, 15, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = ped.color;
+        ctx.beginPath();
+        ctx.ellipse(ped.x, ped.y, 14, 5.5, ped.angle, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = ped.skin;
+        ctx.beginPath();
+        ctx.arc(ped.x + Math.cos(ped.angle) * 15, ped.y + Math.sin(ped.angle) * 15, 5, 0, Math.PI * 2);
+        ctx.fill();
+        continue;
+      }
+      const bob = Math.sin(ped.phase) * 1.3;
+      ctx.fillStyle = PALETTE.shadow;
+      ctx.beginPath();
+      ctx.ellipse(ped.x, ped.y + 8, 10, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = ped.color;
+      ctx.beginPath();
+      ctx.arc(ped.x, ped.y + bob, 9.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = ped.skin;
+      ctx.beginPath();
+      ctx.arc(ped.x, ped.y + bob - 2, 5.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
   function drawParticles(state) {
     for (const p of state.particles) {
       const r = p.size * (p.rise > 0 ? 1.9 - p.t / p.life : 0.35 + (p.t / p.life) * 0.65);
@@ -305,6 +339,7 @@ export function createRenderer(canvas) {
     drawBuildings(state, box);
     drawPalms(state, box);
     drawCars(state, box);
+    drawPeds(state, box);
     drawPlayer(state);
     drawParticles(state);
   }

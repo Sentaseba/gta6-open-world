@@ -1,7 +1,7 @@
 // Everything drawn over the world in view space: the health and cash readout,
 // toasts and banners, and the full-screen panels (title, pause, and the two
 // ways a run ends). The minimap lives here too.
-import { FONT, PALETTE, PLAYER, VIEW } from './config.js';
+import { FONT, PALETTE, PLAYER, POLICE, VIEW } from './config.js';
 
 export const SCREEN_TITLE = 'title';
 export const SCREEN_PLAY = 'play';
@@ -59,6 +59,48 @@ export function createHud() {
     });
   }
 
+  function star(ctx, cx, cy, r, filled, alpha) {
+    ctx.beginPath();
+    for (let i = 0; i < 10; i += 1) {
+      const radius = i % 2 === 0 ? r : r * 0.45;
+      const a = -Math.PI / 2 + (i * Math.PI) / 5;
+      const x = cx + Math.cos(a) * radius;
+      const y = cy + Math.sin(a) * radius;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.globalAlpha = alpha;
+    if (filled) {
+      ctx.fillStyle = PALETTE.accent;
+      ctx.fill();
+    } else {
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawStars(ctx, state) {
+    const stars = state.wanted.stars;
+    if (stars === 0) return;
+    // While the law is losing him, the stars blink out one by one.
+    const blink = state.wanted.hidden && Math.floor(state.time * 2.4) % 2 === 0;
+    for (let i = 0; i < 5; i += 1) {
+      const filled = i < stars;
+      star(ctx, VIEW.width - 34 - (4 - i) * 34, 36, 14, filled, filled && blink ? 0.35 : 0.95);
+    }
+  }
+
+  function drawBust(ctx, state) {
+    const bustT = state.wanted.bustT;
+    if (bustT <= 0.03 || state.player.car !== null) return;
+    const fraction = Math.min(1, bustT / POLICE.bustSeconds);
+    text(ctx, 'BUSTED', VIEW.width / 2, 148, 24, PALETTE.danger, 'center');
+    bar(ctx, VIEW.width / 2 - 130, 158, 260, 12, fraction, PALETTE.danger);
+  }
+
   /** Paint the overlay for the current screen. World first, then this. */
   function draw(ctx, view, state, screen) {
     ctx.setTransform(view.scale, 0, 0, view.scale, view.x, view.y);
@@ -75,11 +117,23 @@ export function createHud() {
       return;
     }
     drawStatus(ctx, state);
+    drawStars(ctx, state);
+    drawBust(ctx, state);
     drawToasts(ctx, state);
     if (screen === SCREEN_PAUSED) {
       ctx.fillStyle = 'rgba(10, 20, 28, 0.4)';
       ctx.fillRect(0, 0, VIEW.width, VIEW.height);
       panel(ctx, 'Paused', ['The bay will wait for you.'], 'Press P to keep playing');
+    } else if (screen === SCREEN_OVER) {
+      ctx.fillStyle = 'rgba(10, 20, 28, 0.5)';
+      ctx.fillRect(0, 0, VIEW.width, VIEW.height);
+      const busted = state.over === 'busted';
+      panel(ctx, busted ? 'BUSTED' : 'WASTED', [
+        busted ? 'The Coral Bay PD walk you out the side door.' : 'You wake up in Bay Hospital, lighter of pocket.',
+        busted ? `Fine $${state.lastFine}` : `Hospital bill $${state.lastFine}`,
+        '',
+        `Cash $${state.cash} · Cars stolen ${state.stats.stolen} · Earned $${state.stats.earned}`,
+      ], 'Press Enter to carry on', PALETTE.danger);
     }
   }
 
